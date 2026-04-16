@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation"
 
 export default function HomePage() {
-  redirect("/leads")
+  // O middleware cuida do redirecionamento baseado na autenticacao
+  // Este redirect é apenas um fallback
+  redirect("/dashboard")
 }
