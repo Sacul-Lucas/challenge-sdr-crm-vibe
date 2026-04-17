@@ -5,13 +5,14 @@ import { createClient } from '@/lib/supabase/client'
 
 export interface WorkspaceMember {
   id: string
-  user_id: string
-  workspace_id: string
+  userId: string
+  workspaceId: string
   role: 'owner' | 'admin' | 'member'
-  user: {
+  profile?: {
     id: string
-    email: string
-    full_name?: string
+    email?: string
+    firstName?: string
+    lastName?: string
   }
 }
 
@@ -41,17 +42,21 @@ export function useWorkspaceMembers(workspaceId?: string) {
       if (error) throw error
 
       // Mapeia os dados para o formato esperado
-      const mappedMembers = (data || []).map((member) => ({
-        id: member.id,
-        user_id: member.user_id,
-        workspace_id: member.workspace_id,
-        role: member.role as 'owner' | 'admin' | 'member',
-        user: {
-          id: member.user_id,
-          email: '', // Email nao disponivel diretamente
-          full_name: (member.profiles as { full_name?: string })?.full_name,
-        },
-      }))
+      const mappedMembers: WorkspaceMember[] = (data || []).map((member) => {
+        const profile = member.profiles as { id?: string; first_name?: string; last_name?: string; email?: string } | null
+        return {
+          id: member.id,
+          userId: member.user_id,
+          workspaceId: member.workspace_id,
+          role: member.role as 'owner' | 'admin' | 'member',
+          profile: profile ? {
+            id: profile.id || member.user_id,
+            email: profile.email,
+            firstName: profile.first_name,
+            lastName: profile.last_name,
+          } : undefined,
+        }
+      })
 
       setMembers(mappedMembers)
     } catch (error) {

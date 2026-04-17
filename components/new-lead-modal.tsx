@@ -24,13 +24,14 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { LEAD_STAGES, LEAD_ORIGINS, type Lead, type LeadStage, type LeadOrigin } from "@/lib/types"
-import { mockUsers } from "@/lib/mock-data"
 
 interface NewLeadModalProps {
-  onLeadCreated?: (lead: Lead) => void
+  onLeadCreated?: (lead: Omit<Lead, "id" | "createdAt" | "updatedAt">) => Promise<void>
+  workspaceId?: string
+  members?: { id: string; name: string }[]
 }
 
-export function NewLeadModal({ onLeadCreated }: NewLeadModalProps) {
+export function NewLeadModal({ onLeadCreated, workspaceId, members = [] }: NewLeadModalProps) {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -45,31 +46,7 @@ export function NewLeadModal({ onLeadCreated }: NewLeadModalProps) {
     assignedTo: "",
   })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const newLead: Lead = {
-      id: Math.random().toString(36).substring(7),
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone || undefined,
-      company: formData.company,
-      role: formData.role || undefined,
-      stage: formData.stage,
-      origin: formData.origin || undefined,
-      notes: formData.notes || undefined,
-      assignedTo: formData.assignedTo || undefined,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-
-    onLeadCreated?.(newLead)
-    setIsLoading(false)
-    setOpen(false)
+  const resetForm = () => {
     setFormData({
       name: "",
       email: "",
@@ -83,6 +60,37 @@ export function NewLeadModal({ onLeadCreated }: NewLeadModalProps) {
     })
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+
+    try {
+      const leadData = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || undefined,
+        company: formData.company,
+        role: formData.role || undefined,
+        stage: formData.stage,
+        origin: formData.origin || undefined,
+        notes: formData.notes || undefined,
+        assignedTo: formData.assignedTo || undefined,
+        workspaceId: workspaceId,
+      }
+
+      if (onLeadCreated) {
+        await onLeadCreated(leadData)
+      }
+
+      setOpen(false)
+      resetForm()
+    } catch (error) {
+      console.error("Erro ao criar lead:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -91,7 +99,7 @@ export function NewLeadModal({ onLeadCreated }: NewLeadModalProps) {
           <span>Novo Lead</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar Novo Lead</DialogTitle>
           <DialogDescription>
@@ -221,11 +229,17 @@ export function NewLeadModal({ onLeadCreated }: NewLeadModalProps) {
                     <SelectValue placeholder="Selecione o responsavel" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockUsers.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.name}
+                    {members.length > 0 ? (
+                      members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        Nenhum membro disponivel
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectContent>
                 </Select>
               </Field>

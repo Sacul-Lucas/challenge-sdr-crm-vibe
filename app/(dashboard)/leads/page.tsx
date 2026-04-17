@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, Filter } from "lucide-react"
+import { Search, Filter, LayoutGrid, List, AlertCircle } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import {
@@ -11,23 +11,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
 import { NewLeadModal } from "@/components/new-lead-modal"
 import { LeadsTable } from "@/components/leads-table"
-import { mockLeads } from "@/lib/mock-data"
+import { KanbanBoard } from "@/components/kanban-board"
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/types"
-
-const CURRENT_USER_ID = "1" // Lucas Silva
+import { useLeads } from "@/hooks/use-leads"
+import { useAuth } from "@/hooks/use-auth"
+import { useWorkspaces } from "@/hooks/use-workspaces"
+import { useWorkspaceMembers } from "@/hooks/use-workspace-members"
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>(mockLeads)
+  const { user } = useAuth()
+  const { currentWorkspace } = useWorkspaces()
+  const workspaceId = currentWorkspace?.id || ""
+  
+  const { leads, isLoading, error, createLead, updateLead, refetch } = useLeads(workspaceId)
+  const { members } = useWorkspaceMembers(workspaceId)
+
   const [activeTab, setActiveTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all")
-  const [isLoading, setIsLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<"table" | "kanban">("table")
 
-  const handleLeadCreated = (newLead: Lead) => {
-    setLeads((prev) => [newLead, ...prev])
+  const membersList = useMemo(() => {
+    return members.map((m) => ({
+      id: m.userId,
+      name: m.profile?.firstName 
+        ? `${m.profile.firstName} ${m.profile.lastName || ""}`.trim() 
+        : m.profile?.email || "Usuario",
+    }))
+  }, [members])
+
+  const handleLeadCreated = async (leadData: Omit<Lead, "id" | "createdAt" | "updatedAt">) => {
+    await createLead(leadData)
+    refetch()
+  }
+
+  const handleStageChange = async (leadId: string, newStage: LeadStage) => {
+    await updateLead(leadId, { stage: newStage })
+    refetch()
+  }
+
+  const handleLeadEdit = async (leadData: Partial<Lead> & { id: string }) => {
+    const { id, ...data } = leadData
+    await updateLead(id, data)
+    refetch()
   }
 
   const filteredLeads = useMemo(() => {
@@ -35,7 +66,7 @@ export default function LeadsPage() {
 
     // Filter by tab
     if (activeTab === "mine") {
-      result = result.filter((lead) => lead.assignedTo === CURRENT_USER_ID)
+      result = result.filter((lead) => lead.assignedTo === user?.id)
     }
 
     // Filter by stage
@@ -55,11 +86,11 @@ export default function LeadsPage() {
     }
 
     return result
-  }, [leads, activeTab, stageFilter, searchQuery])
+  }, [leads, activeTab, stageFilter, searchQuery, user?.id])
 
-  const myLeadsCount = leads.filter(
-    (lead) => lead.assignedTo === CURRENT_USER_ID
-  ).length
+  const myLeadsCount = useMemo(() => {
+    return leads.filter((lead) => lead.assignedTo === user?.id).length
+  }, [leads, user?.id])
 
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-6">
@@ -70,8 +101,22 @@ export default function LeadsPage() {
             Gerencie e acompanhe seus leads de vendas
           </p>
         </div>
-        <NewLeadModal onLeadCreated={handleLeadCreated} />
+        <NewLeadModal 
+          onLeadCreated={handleLeadCreated}
+          workspaceId={workspaceId}
+          members={membersList}
+        />
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar leads</AlertTitle>
+          <AlertDescription>
+            {error.message || "Ocorreu um erro ao buscar os leads. Tente novamente mais tarde."}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -121,15 +166,63 @@ export default function LeadsPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            <ToggleGroup
+              type="single"
+              value={viewMode}
+              onValueChange={(value) => value && setViewMode(value as "table" | "kanban")}
+              className="hidden sm:flex"
+            >
+              <ToggleGroupItem value="table" aria-label="Visualizacao em tabela">
+                <List className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="kanban" aria-label="Visualizacao em Kanban">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
         </div>
 
         <TabsContent value="all" className="mt-4">
-          <LeadsTable leads={filteredLeads} isLoading={isLoading} />
+          {viewMode === "table" ? (
+            <LeadsTable 
+              leads={filteredLeads} 
+              isLoading={isLoading}
+              onLeadEdit={handleLeadEdit}
+              onStageChange={handleStageChange}
+              members={membersList}
+            />
+          ) : (
+            <KanbanBoard
+              workspaceId={workspaceId}
+              leads={filteredLeads}
+              isLoading={isLoading}
+              onStageChange={handleStageChange}
+              onLeadEdit={handleLeadEdit}
+              members={membersList}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="mine" className="mt-4">
-          <LeadsTable leads={filteredLeads} isLoading={isLoading} />
+          {viewMode === "table" ? (
+            <LeadsTable 
+              leads={filteredLeads} 
+              isLoading={isLoading}
+              onLeadEdit={handleLeadEdit}
+              onStageChange={handleStageChange}
+              members={membersList}
+            />
+          ) : (
+            <KanbanBoard
+              workspaceId={workspaceId}
+              leads={filteredLeads}
+              isLoading={isLoading}
+              onStageChange={handleStageChange}
+              onLeadEdit={handleLeadEdit}
+              members={membersList}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

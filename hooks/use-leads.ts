@@ -26,7 +26,7 @@ export function useLeads(workspaceId?: string) {
   const fetchLeads = useCallback(async (wsId: string) => {
     setLoading(true)
     setError(null)
-    
+
     try {
       const { data, error } = await supabase
         .from('leads')
@@ -35,7 +35,7 @@ export function useLeads(workspaceId?: string) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      
+
       // Mapeia os dados do banco para o formato do tipo Lead
       const mappedLeads: Lead[] = (data || []).map((lead) => ({
         id: lead.id,
@@ -51,7 +51,7 @@ export function useLeads(workspaceId?: string) {
         createdAt: new Date(lead.created_at),
         updatedAt: new Date(lead.updated_at),
       }))
-      
+
       setLeads(mappedLeads)
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Erro ao buscar leads'))
@@ -81,11 +81,11 @@ export function useLeads(workspaceId?: string) {
         .single()
 
       if (error) throw error
-      
+
       if (workspaceId) {
         await fetchLeads(workspaceId)
       }
-      
+
       return { data, error: null }
     } catch (err) {
       return { data: null, error: err }
@@ -105,16 +105,27 @@ export function useLeads(workspaceId?: string) {
         .single()
 
       if (error) throw error
-      
+
       if (workspaceId) {
         await fetchLeads(workspaceId)
       }
-      
+
       return { data, error: null }
     } catch (err) {
       return { data: null, error: err }
     }
   }, [supabase, workspaceId, fetchLeads])
+
+  const updateLeadStage = async (leadId: string, newStageId: number) => {
+    const { error } = await supabase
+      .from('leads')
+      .update({ stage: newStageId.toString() })
+      .eq('id', leadId)
+      .eq('workspace_id', workspaceId)
+
+    if (!error) await fetchLeads(workspaceId!)
+    return { error }
+  }
 
   const deleteLead = useCallback(async (id: string) => {
     try {
@@ -124,11 +135,11 @@ export function useLeads(workspaceId?: string) {
         .eq('id', id)
 
       if (error) throw error
-      
+
       if (workspaceId) {
         await fetchLeads(workspaceId)
       }
-      
+
       return { error: null }
     } catch (err) {
       return { error: err }
@@ -141,13 +152,15 @@ export function useLeads(workspaceId?: string) {
     }
   }, [workspaceId, fetchLeads])
 
-  return { 
-    leads, 
-    loading, 
+  return {
+    leads,
+    loading,
+    isLoading: loading,
     error,
-    createLead, 
+    createLead,
     updateLead,
+    updateLeadStage,
     deleteLead,
-    refetch: () => workspaceId && fetchLeads(workspaceId) 
+    refetch: () => workspaceId && fetchLeads(workspaceId)
   }
 }
