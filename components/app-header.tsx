@@ -50,7 +50,7 @@ export function AppHeader() {
       <div className="flex items-center gap-3">
         <Button variant="outline" size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">New Workspace</span>
+          <span className="hidden sm:inline">Novo workspace</span>
         </Button>
 
         <Button
@@ -94,7 +94,7 @@ export function AppHeader() {
                 <span>Perfil</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="gap-2 text-destructive focus:text-destructive"
                 onClick={signOut}
               >
